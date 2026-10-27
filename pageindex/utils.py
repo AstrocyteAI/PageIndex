@@ -1,4 +1,5 @@
-import litellm
+import openai
+import tiktoken
 import logging
 import os
 import textwrap
@@ -21,22 +22,56 @@ from types import SimpleNamespace as config
 if not os.getenv("OPENAI_API_KEY") and os.getenv("CHATGPT_API_KEY"):
     os.environ["OPENAI_API_KEY"] = os.getenv("CHATGPT_API_KEY")
 
-litellm.drop_params = True
+# Chat completions go through the OpenAI SDK, which reads OPENAI_API_KEY and
+# OPENAI_BASE_URL from the environment. Point OPENAI_BASE_URL at an AISIX
+# gateway to reach other providers; `model` is then an AISIX model alias.
+_client = None
+_aclient = None
+
+
+def _get_client():
+    global _client
+    if _client is None:
+        _client = openai.OpenAI()
+    return _client
+
+
+def _get_aclient():
+    global _aclient
+    if _aclient is None:
+        _aclient = openai.AsyncOpenAI()
+    return _aclient
+
+
+def _encoding_for(model):
+    try:
+        return tiktoken.encoding_for_model(model)
+    except (KeyError, TypeError):
+        # Not an OpenAI model name (e.g. a gateway alias): count with the
+        # tokenizer of current OpenAI models. An estimate is enough here, since
+        # the counts only size chunks.
+        return tiktoken.get_encoding("o200k_base")
+
 
 def count_tokens(text, model=None):
     if not text:
         return 0
-    return litellm.token_counter(model=model, text=text)
+    return len(_encoding_for(model).encode(text, disallowed_special=()))
+
+
+def _bare_model(model):
+    # Earlier versions routed through LiteLLM and took "litellm/<model>".
+    return model.removeprefix("litellm/")
 
 
 def llm_completion(model, prompt, chat_history=None, return_finish_reason=False):
     if model:
-        model = model.removeprefix("litellm/")
+        model = _bare_model(model)
     max_retries = 10
     messages = list(chat_history) + [{"role": "user", "content": prompt}] if chat_history else [{"role": "user", "content": prompt}]
     for i in range(max_retries):
         try:
-            response = litellm.completion(
+            response = _get_client().chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=0,
@@ -61,12 +96,12 @@ def llm_completion(model, prompt, chat_history=None, return_finish_reason=False)
 
 async def llm_acompletion(model, prompt):
     if model:
-        model = model.removeprefix("litellm/")
+        model = _bare_model(model)
     max_retries = 10
     messages = [{"role": "user", "content": prompt}]
     for i in range(max_retries):
         try:
-            response = await litellm.acompletion(
+            response = await _get_aclient().chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=0,
@@ -391,7 +426,7 @@ def get_page_tokens(pdf_path, model=None, pdf_parser="PyPDF2"):
         for page_num in range(len(pdf_reader.pages)):
             page = pdf_reader.pages[page_num]
             page_text = page.extract_text()
-            token_length = litellm.token_counter(model=model, text=page_text)
+            token_length = count_tokens(page_text, model)
             page_list.append((page_text, token_length))
         return page_list
     elif pdf_parser == "PyMuPDF":
@@ -403,7 +438,7 @@ def get_page_tokens(pdf_path, model=None, pdf_parser="PyPDF2"):
         page_list = []
         for page in doc:
             page_text = page.get_text()
-            token_length = litellm.token_counter(model=model, text=page_text)
+            token_length = count_tokens(page_text, model)
             page_list.append((page_text, token_length))
         return page_list
     else:

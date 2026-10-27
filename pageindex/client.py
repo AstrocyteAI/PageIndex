@@ -16,13 +16,18 @@ META_INDEX = "_meta.json"
 
 
 def _normalize_retrieve_model(model: str) -> str:
-    """Preserve supported Agents SDK prefixes and route other provider paths via LiteLLM."""
-    passthrough_prefixes = ("litellm/", "openai/")
-    if not model or "/" not in model:
+    """Send every model through the Agents SDK's OpenAI provider.
+
+    The provider talks to OPENAI_BASE_URL (an AISIX gateway), where `model` is a
+    gateway alias, so a name containing "/" is wrapped in "openai/" to keep the
+    Agents SDK from reading its first segment as a provider prefix.
+    """
+    if not model:
         return model
-    if model.startswith(passthrough_prefixes):
+    model = model.removeprefix("litellm/")
+    if model.startswith("openai/") or "/" not in model:
         return model
-    return f"litellm/{model}"
+    return f"openai/{model}"
 
 
 class PageIndexClient:

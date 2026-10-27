@@ -5,20 +5,10 @@
 # `from pageindex import md_to_tree`; we consume it as an installed
 # dependency instead of via a hardcoded sys.path.
 #
-# Deliberately DOES NOT declare litellm or python-dotenv:
-#   - Upstream requirements.txt pins litellm==1.83.7 + python-dotenv==1.2.2,
-#     which re-triggers the documented three-way dotenv conflict in
-#     astrocyte-py/pyproject.toml (litellm 1.83.x pins dotenv==1.0.1;
-#     fastmcp>=3.0 needs dotenv>=1.1.0). See astrocyte-py/pyproject.toml
-#     lines ~98-112.
-#   - The Astrocyte bench env already installs litellm via
-#     astrocyte-llm-litellm (the 1.83.5-1.83.7 secure-aiohttp window)
-#     in `make bench-runner-deps`, layered imperatively so uv's strict
-#     resolver never has to solve these together. Declaring litellm/
-#     dotenv here would drag them back into resolution and conflict.
-# `pageindex/__init__.py` imports submodules that reference litellm at
-# import time, but litellm is guaranteed present in the bench env by
-# the time this package is imported.
+# Chat completions use the OpenAI SDK, which the Astrocyte bench env already
+# installs (astrocyte[openai]); it is not declared here so this package does not
+# constrain the bench env's resolution. OPENAI_BASE_URL points it at an AISIX
+# gateway for other providers.
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -33,7 +23,9 @@ dependencies = [
     "pymupdf>=1.26",
     "PyPDF2>=3.0",
     "pyyaml>=6.0",
-    # litellm + python-dotenv intentionally omitted — see header comment.
+    # openai is intentionally omitted — see header comment.
+    "tiktoken>=0.12",
+    "python-dotenv>=1.1.0",
 ]
 
 [tool.setuptools.packages.find]

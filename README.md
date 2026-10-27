@@ -155,10 +155,11 @@ pip3 install --upgrade -r requirements.txt
 
 ### 2. Set your LLM API key
 
-Create a `.env` file in the root directory with your LLM API key. Multi-LLM is supported via [LiteLLM](https://docs.litellm.ai/docs/providers):
+Create a `.env` file in the root directory with your LLM API key. Other providers are reached through an OpenAI-compatible gateway such as [AISIX](https://github.com/api7/aisix): set `OPENAI_BASE_URL` to the gateway and use its model alias as the model name:
 
 ```bash
 OPENAI_API_KEY=your_openai_key_here
+# OPENAI_BASE_URL=http://localhost:4000/v1   # optional: an AISIX gateway
 ```
 
 ### 3. Generate PageIndex structure for your PDF
